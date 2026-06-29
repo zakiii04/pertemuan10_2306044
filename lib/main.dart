@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'pages/home_page.dart';
 import 'pages/login_page.dart';
+import 'pages/home_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -22,16 +21,12 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    checkLogin();
+    checkLoginStatus();
   }
 
-  Future<void> checkLogin() async {
+  Future<void> checkLoginStatus() async {
     final prefs = await SharedPreferences.getInstance();
-
-    isLogin = prefs.getBool('isLogin') ?? false;
-
-    if (!mounted) return;
-
+    isLogin = prefs.getBool("isLogin") ?? false;
     setState(() {
       isLoading = false;
     });
@@ -41,20 +36,21 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     if (isLoading) {
       return const MaterialApp(
-        debugShowCheckedModeBanner: false,
         home: Scaffold(
           body: Center(
-            child: CircularProgressIndicator(),
-          ),
+            child: CircularProgressIndicator()
+            ),
         ),
       );
     }
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: isLogin
+      home:
+      isLogin
           ? const HomePage()
           : const LoginPage(),
     );
+      
   }
 }

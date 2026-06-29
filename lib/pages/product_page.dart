@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:pertemuan10_2306044/models/product_model.dart';
-import 'package:pertemuan10_2306044/pages/product_detail_page.dart';
-import 'package:pertemuan10_2306044/widgets/product_card.dart';
+import '../models/product_model.dart';
+import '../pages/product_detail_page.dart';
+import '../widgets/product_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
+import 'dart:typed_data';
 
 class ProductPage extends StatefulWidget {
   const ProductPage({super.key});
@@ -12,71 +15,78 @@ class ProductPage extends StatefulWidget {
 }
 
 class _ProductPageState extends State<ProductPage> {
-  // variable utama
+  //variable utama
   List<ProductModel> products = [];
 
+  //method load produk dari shared preferences
   Future<void> loadProducts() async {
     final prefs = await SharedPreferences.getInstance();
-    List<String> productList = prefs.getStringList('products') ?? [];
-
+    List<String> productList = prefs.getStringList("products") ?? [];
+    if (!mounted) return;
     setState(() {
-      products = productList.reversed
+      products = productList
           .map((item) => ProductModel.fromJson(item))
           .toList();
     });
   }
 
+  @override
+  void initState() {
+    super.initState();
+    loadProducts();
+  }
+
+  //method untuk menyimpan produk ke shared preferences
   Future<void> saveProducts() async {
     final prefs = await SharedPreferences.getInstance();
     List<String> productList = products.map((item) => item.toJson()).toList();
-    await prefs.setStringList('products', productList);
+    await prefs.setStringList("products", productList);
   }
 
+  //method untuk menambahkan produk baru
   Future<void> addProduct(ProductModel product) async {
     setState(() {
       products.add(product);
     });
-
     await saveProducts();
-
     if (!mounted) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Produk berhasil ditambahkan")),
+      const SnackBar(content: Text("Produk berhasil ditambahkan!")),
     );
   }
 
-  Future<void> updateProduct(int index, ProductModel product) async {
+  //method untuk mengedit produk
+  Future<void> editProduct(int index, ProductModel product) async {
     setState(() {
       products[index] = product;
     });
-
     await saveProducts();
-
     if (!mounted) return;
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Produk berhasil diubah")));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Produk berhasil diperbarui!")),
+    );
   }
 
+  //method untuk menghapus produk
   Future<void> deleteProduct(int index) async {
     setState(() {
       products.removeAt(index);
     });
-
     await saveProducts();
-
     if (!mounted) return;
-
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text("Produk berhasil dihapus")));
+    ).showSnackBar(const SnackBar(content: Text("Produk berhasil dihapus!")));
   }
 
-  void showForm({ProductModel? product, int? index}) {
-    final formKey = GlobalKey<FormState>();
+  //showform untuk tambah/edit produk
+  //metode untuk  convert gambar ke base64
+  Future<String> convertImageToBase64(XFile image) async {
+    Uint8List imageBytes = await image.readAsBytes();
 
+    return base64Encode(imageBytes);
+  }
+  void showForm({ProductModel? product, int? index}) {
     TextEditingController nameController = TextEditingController(
       text: product?.name ?? "",
     );
@@ -89,108 +99,147 @@ class _ProductPageState extends State<ProductPage> {
       text: product?.price.toString() ?? "",
     );
 
+    TextEditingController imageController = TextEditingController(
+      text: product?.image ?? "",
+    );
+
+    XFile? selectedImage;
+    final ImagePicker picker = ImagePicker();
+
+    //method untuk memilih gambar dari galeri
+    Future<void> pickImage(StateSetter setDialogState) async {
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+      if (image != null) {
+        setDialogState(() {
+          selectedImage = image;
+          imageController.text = image.path;
+        });
+      }
+    }
+
+    Widget previewImage() {
+      // jika menambahkan produk
+      if (selectedImage != null) {
+        return FutureBuilder<Uint8List>(
+          future: selectedImage!.readAsBytes(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const CircularProgressIndicator();
+            }
+
+            return Image.memory(
+              snapshot.data!,
+              width: 150,
+              height: 150,
+              fit: BoxFit.cover,
+            );
+          },
+        );
+      }
+
+      if (product != null && product.image.isNotEmpty) {
+        try {
+          final bytes = base64Decode(product.image);
+          return Image.memory(
+            bytes,
+            width: 150,
+            height: 150,
+            fit: BoxFit.cover,
+          );
+        } catch (_) {
+          return const SizedBox.shrink();
+        }
+      }
+
+      return const SizedBox.shrink();
+    }
+
+
+
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(product == null ? "Tambahkan produk" : "Edit produk"),
-        content: Form(
-          key: formKey,
-          child: Column(
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(product == null ? "Tambah Produk" : "Edit Produk"),
+          content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextFormField(
+              TextField(
                 controller: nameController,
-                decoration: const InputDecoration(labelText: "Nama"),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return "Nama produk wajib diisi";
-                  }
-                  return null;
-                },
+                decoration: const InputDecoration(labelText: "Nama Produk"),
               ),
-              TextFormField(
+              TextField(
                 controller: descriptionController,
-                decoration: const InputDecoration(labelText: "Deskripsi"),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return "Deskripsi wajib diisi";
-                  }
-                  return null;
-                },
+                decoration: const InputDecoration(labelText: "Deskripsi Produk"),
               ),
-              TextFormField(
+              TextField(
                 controller: priceController,
-                decoration: const InputDecoration(labelText: "Harga"),
                 keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return "Harga wajib diisi";
-                  }
-
-                  if (int.tryParse(value) == null) {
-                    return "Harga harus berupa angka";
-                  }
-
-                  if (int.parse(value) <= 0) {
-                    return "Harga harus lebih dari 0";
-                  }
-
-                  return null;
-                },
+                decoration: const InputDecoration(labelText: "Harga Produk"),
               ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: () => pickImage(setDialogState),
+                icon: const Icon(Icons.photo_library),
+                label: const Text("Pilih Gambar"),
+              ),
+              const SizedBox(height: 12),
+              previewImage(),
             ],
           ),
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                final productName = nameController.text.trim();
+                final productDescription = descriptionController.text.trim();
+                final productPrice = int.tryParse(priceController.text) ?? 0;
+
+                if (productName.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Nama produk tidak boleh kosong"),
+                    ),
+                  );
+                  return;
+                }
+
+                final imageBase64 = selectedImage != null
+                    ? await convertImageToBase64(selectedImage!)
+                    : product?.image ?? "";
+
+                final newProduct = ProductModel(
+                  name: productName,
+                  description: productDescription,
+                  price: productPrice,
+                  image: imageBase64,
+                );
+                Navigator.pop(context);
+                if (product == null) {
+                  await addProduct(newProduct);
+                } else {
+                  await editProduct(index!, newProduct);
+                }
+              },
+              child: Text(product == null ? "Simpan" : "Perbaharui"),
+            ),
+          ],
         ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              if (!formKey.currentState!.validate()) {
-                return;
-              }
-
-              final newProduct = ProductModel(
-                name: nameController.text.trim(),
-                description: descriptionController.text.trim(),
-                price: int.parse(priceController.text.trim()),
-              );
-
-              if (product == null) {
-                addProduct(newProduct);
-              } else {
-                updateProduct(index!, newProduct);
-              }
-
-              Navigator.pop(context);
-            },
-            child: Text(product == null ? "Simpan" : "Ubah"),
-          ),
-        ],
       ),
     );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    loadProducts();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          "Produk",
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
+        title: Text("Product"),
         backgroundColor: Colors.green,
         leading: IconButton(
           icon: Icon(Icons.chevron_left, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            Navigator.pop(context);
+          },
         ),
       ),
       body: Container(
@@ -206,7 +255,16 @@ class _ProductPageState extends State<ProductPage> {
                         final product = products[index];
                         return ProductCard(
                           product: product,
-                          onEdit: () => showForm(product: product, index: index),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ProductDetailPage(product: product),
+                            ),
+                          ),
+                          onEdit: () => showForm(
+                            product: products[index],
+                            index: index,
+                          ),
                           onDelete: () => deleteProduct(index),
                         );
                       },
@@ -216,7 +274,7 @@ class _ProductPageState extends State<ProductPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: showForm,
+        onPressed: () => showForm(),
         child: const Icon(Icons.add),
       ),
     );
